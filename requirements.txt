@@ -1,0 +1,10 @@
+requests>=2.31
+beautifulsoup4>=4.12
+python-dotenv>=1.0
+ddgs>=9.0
+streamlit>=1.35
+
+# Model providers: install only the one you use.
+#   pip install anthropic     # Claude
+#   pip install groq          # Groq
+#   pip install google-genai  # Gemini
