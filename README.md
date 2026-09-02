@@ -4,9 +4,8 @@ An agentic prospecting and outreach engine. You describe an ideal customer in a
 sentence and it finds matching companies, researches each one, scores fit, and
 drafts personalised outreach — then tells you what each qualified lead cost.
 
-> **Status: in active development.** The design below is settled and the agent
-> loop is being built now. This README describes the architecture; code lands
-> incrementally.
+> **Status: working.** See [`examples/run-2026-09-02.md`](examples/run-2026-09-02.md)
+> for a real run, copied out of the database unedited.
 
 ## Why
 
@@ -55,14 +54,34 @@ figure that decides whether a channel is worth running.
 - **Provider-agnostic.** The model is a config value, so the same loop runs on
   Claude, Groq, or Gemini.
 
+## Running it
+
+```bash
+pip install -r requirements.txt
+cp .env.example .env          # add one API key
+python run.py "seed-stage Indian SaaS companies hiring their first AI engineer"
+streamlit run app.py          # dashboard: prospects, drafts, trace, cost
+```
+
+Set `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, or `GOOGLE_API_KEY`. Whichever is
+present is used; `LLM_PROVIDER` forces a choice.
+
+Free tiers return 503 often, so each provider carries a fallback chain that is
+swept with backoff. One recorded run switched models six times and still
+finished. Without that the SDK retries the same overloaded model in silence and
+the agent looks hung.
+
 ## Stack
 
-Python · Claude tool-calling API · SQLite · Streamlit
+Python · Claude, Groq or Gemini · SQLite · Streamlit
 
 ## Roadmap
 
-- [ ] Tool definitions and the agent loop
-- [ ] Critic pass and regeneration
-- [ ] SQLite persistence and per-prospect token logging
-- [ ] Streamlit dashboard: prospects, scores, drafts, cost per qualified lead
-- [ ] Worked example run committed to `examples/`
+- [x] Tool definitions and the agent loop
+- [x] Critic pass and regeneration
+- [x] SQLite persistence and per-prospect token logging
+- [x] Model fallback chain with backoff
+- [x] Streamlit dashboard: prospects, scores, drafts, cost per qualified lead
+- [x] Worked example run committed to `examples/`
+- [ ] Reply handling and a follow-up sequence
+- [ ] Dedupe against companies contacted in earlier runs
