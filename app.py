@@ -10,6 +10,8 @@ audit is a prospect list you cannot trust.
 from __future__ import annotations
 
 import json
+from pathlib import Path
+import tempfile
 
 import streamlit as st
 
@@ -20,7 +22,12 @@ from agent.store import Store
 
 st.set_page_config(page_title="AI Outbound Agent", page_icon="◆", layout="wide")
 
-DB = "prospects.db"
+# Each browser session has its own temporary database. Never share live runs
+# or a visitor's credentials between people using the public demo.
+if "workspace" not in st.session_state:
+    st.session_state.workspace = tempfile.TemporaryDirectory(prefix="outbound-")
+DB = str(Path(st.session_state.workspace.name) / "prospects.db")
+EXAMPLE = Path(__file__).parent / "examples" / "run-2026-09-02.md"
 
 
 def fmt_signals(raw: str) -> str:
@@ -35,14 +42,20 @@ store = Store(DB)
 # ---------------------------------------------------------------- sidebar
 
 st.sidebar.title("AI Outbound Agent")
+st.sidebar.caption("Research prospects. Draft something worth reading.")
 
-try:
-    settings = load_settings(db_path=DB)
-    st.sidebar.caption(f"provider **{settings.provider}** · model `{settings.model}`")
-    ready = True
-except RuntimeError as exc:
-    st.sidebar.error(str(exc))
-    settings, ready = None, False
+provider = st.sidebar.selectbox(
+    "Model provider", options=["groq", "gemini", "claude"],
+    format_func=lambda value: {"groq": "Groq", "gemini": "Gemini", "claude": "Claude"}[value],
+)
+api_key = st.sidebar.text_input(
+    "Your API key", type="password", key=f"key_{provider}",
+    help="Used for your live runs in this browser session. Not saved to the database.",
+)
+default_model = "gemini-flash-latest" if provider == "gemini" else MODELS[provider]
+model = st.sidebar.text_input("Model", value=default_model, key=f"model_{provider}")
+ready = bool(api_key.strip() and model.strip())
+st.sidebar.caption("No key needed to explore the recorded example below.")
 
 st.sidebar.subheader("New run")
 icp = st.sidebar.text_area(
@@ -51,7 +64,7 @@ icp = st.sidebar.text_area(
     height=110,
 )
 col_a, col_b = st.sidebar.columns(2)
-target = col_a.number_input("Prospects", 1, 25, 5)
+target = col_a.number_input("Prospects", 1, 10, 2)
 floor = col_b.number_input("Min score", 0, 100, 60)
 
 start = st.sidebar.button(
@@ -99,12 +112,15 @@ if start:
         try:
             result = run_agent(
                 icp.strip(),
-                load_settings(db_path=DB, max_prospects=int(target),
-                              min_fit_score=int(floor)),
+                load_settings(provider=provider, model=model.strip(),
+                              api_key=api_key.strip(), db_path=DB,
+                              max_prospects=int(target), min_fit_score=int(floor)),
                 on_event=on_event,
             )
-        except RuntimeError as exc:
-            st.error(f"Run failed: {exc}")
+        except Exception as exc:
+            # SDK errors can contain request details. Never render a key.
+            message = str(exc).replace(api_key.strip(), "[redacted]")
+            st.error(f"Run failed: {message[:800]}")
             st.stop()
 
     st.success(f"Done. {len(result.prospects)} prospect(s) saved.")
@@ -115,12 +131,29 @@ if start:
 # ---------------------------------------------------------------- report
 
 if not selected:
-    st.title("No runs yet")
+    st.title("AI Outbound Agent")
     st.write(
-        "Describe an ideal customer in the sidebar and hit **Run agent**. "
-        "The agent searches, reads company pages, scores fit, drafts outreach, "
-        "and reviews its own drafts before saving them."
+        "Describe who you want to reach. Get researched companies, fit scores "
+        "and outreach drafts with a review of what makes each one specific."
     )
+    st.info(
+        "Recorded example · 2 September 2026. These are saved outputs, not a new "
+        "search or current hiring information. Add your API key in the sidebar "
+        "to research a fresh customer profile."
+    )
+    st.caption("Drafts only. The app does not send emails or messages.")
+    example = EXAMPLE.read_text(encoding="utf-8")
+    c1, c2, c3 = st.columns(3)
+    c1.metric("Example prospects", 2)
+    c2.metric("Research iterations", 20)
+    c3.metric("Recorded tokens", "164,990")
+    tab_p, tab_t = st.tabs(["Prospects and drafts", "Research trace"])
+    with tab_p:
+        st.markdown("## Prospect 1" + example.split("## Prospect 1", 1)[1].split("## An earlier run", 1)[0])
+    with tab_t:
+        st.markdown("## What it did" + example.split("## What it did", 1)[1].split("## Prospect 1", 1)[0])
+    st.download_button("Download recorded example", example, "outbound-recorded-example.md")
+    st.link_button("View source on GitHub", "https://github.com/techi101/ai-outbound-agent")
     st.stop()
 
 meta = next((r for r in store.runs(200) if r["run_id"] == selected), None)

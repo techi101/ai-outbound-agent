@@ -75,6 +75,32 @@ the agent looks hung.
 
 Python · Claude, Groq or Gemini · SQLite · Streamlit
 
+## Public demo and deployment
+
+The web app opens with the [recorded example](examples/run-2026-09-02.md), so
+visitors can inspect prospects, drafts and the research trace without an API
+key. The example is labelled with its recording date; it is not fresh research.
+
+For live research, choose a provider and enter your own API key in the sidebar.
+Keys are passed directly to that session's model client, not written to an
+environment variable or the database. Each browser session has a separate,
+temporary SQLite database. Refreshing or closing a session can discard its
+results. The app never sends outreach messages.
+
+To host this repository on Streamlit Community Cloud:
+
+1. Open <https://share.streamlit.io> and create an app from
+   `techi101/ai-outbound-agent`, branch `main`, entrypoint `app.py`.
+2. Select Python 3.12 in Advanced settings. No server-side API key is needed.
+3. Deploy and verify that the recorded example loads without signing in.
+4. For a live run, supply a valid provider key and a model available to your
+   account. Model availability and provider limits vary by account.
+
+All three provider SDKs are included in `requirements.txt`. Keep secrets out of
+Git; `.streamlit/secrets.toml` and `.env` are ignored.
+
+Run the offline deployment checks with `python -m unittest discover -s tests -v`.
+
 ## Roadmap
 
 - [x] Tool definitions and the agent loop

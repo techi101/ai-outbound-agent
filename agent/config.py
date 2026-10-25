@@ -8,7 +8,7 @@ LLM_PROVIDER explicitly.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from dotenv import load_dotenv
 
@@ -48,6 +48,7 @@ class Settings:
     max_prospects: int = 10
     min_fit_score: int = 60
     db_path: str = "prospects.db"
+    api_key: str | None = field(default=None, repr=False, compare=False)
 
 
 def _detect_provider() -> str:
@@ -75,6 +76,12 @@ def _detect_provider() -> str:
 
 
 def load_settings(**overrides) -> Settings:
-    provider = overrides.pop("provider", None) or _detect_provider()
+    provider = overrides.pop("provider", None)
+    api_key = overrides.pop("api_key", None)
+    if api_key:
+        if provider not in MODELS:
+            raise ValueError("Choose a supported provider for this API key.")
+    else:
+        provider = provider or _detect_provider()
     model = overrides.pop("model", None) or os.getenv("LLM_MODEL") or MODELS[provider]
-    return Settings(provider=provider, model=model, **overrides)
+    return Settings(provider=provider, model=model, api_key=api_key, **overrides)

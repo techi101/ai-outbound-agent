@@ -78,7 +78,8 @@ def run(
     """
     settings = settings or load_settings()
     llm = build_llm(
-        settings.provider, settings.model, FALLBACKS.get(settings.provider)
+        settings.provider, settings.model, FALLBACKS.get(settings.provider),
+        api_key=settings.api_key,
     )
     store = Store(settings.db_path)
     run_id = f"run_{int(time.time())}_{uuid.uuid4().hex[:6]}"

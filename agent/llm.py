@@ -69,11 +69,11 @@ class LLM:
 
 
 class ClaudeLLM(LLM):
-    def __init__(self, model: str):
+    def __init__(self, model: str, api_key: str | None = None):
         super().__init__(model)
         import anthropic
 
-        self._client = anthropic.Anthropic()
+        self._client = anthropic.Anthropic(api_key=api_key)
 
     def _to_anthropic(self, messages: list[dict]) -> list[dict]:
         out: list[dict] = []
@@ -204,25 +204,27 @@ class _OpenAIStyleLLM(LLM):
 
 
 class GroqLLM(_OpenAIStyleLLM):
-    def __init__(self, model: str):
+    def __init__(self, model: str, api_key: str | None = None):
         super().__init__(model)
         from groq import Groq
 
-        self._client = Groq()
+        self._client = Groq(api_key=api_key)
 
     def _client_call(self, **kwargs):
         return self._client.chat.completions.create(**kwargs)
 
 
 class GeminiLLM(LLM):
-    def __init__(self, model: str):
+    def __init__(self, model: str, api_key: str | None = None):
         super().__init__(model)
         import os
 
         from google import genai
 
         self._genai = genai
-        self._client = genai.Client(api_key=os.environ["GOOGLE_API_KEY"])
+        self._client = genai.Client(
+            api_key=api_key or os.getenv("GOOGLE_API_KEY") or os.getenv("GEMINI_API_KEY")
+        )
 
     def _to_gemini(self, messages: list[dict]) -> list[dict]:
         contents: list[dict] = []
@@ -338,7 +340,7 @@ class FallbackLLM(LLM):
     SWEEPS = 4
     BACKOFF_SECONDS = (0, 15, 45, 90)
 
-    def __init__(self, provider: str, models: list[str]):
+    def __init__(self, provider: str, models: list[str], api_key: str | None = None):
         if not models:
             raise ValueError("FallbackLLM needs at least one model")
         super().__init__(models[0])
@@ -347,11 +349,12 @@ class FallbackLLM(LLM):
         self.active = models[0]
         self.switches: list[tuple[str, str, str]] = []  # (from, to, why)
         self.waits = 0
+        self._api_key = api_key
         self._cache: dict[str, LLM] = {}
 
     def _backend(self, model: str) -> LLM:
         if model not in self._cache:
-            self._cache[model] = _BACKENDS[self.provider](model)
+            self._cache[model] = _BACKENDS[self.provider](model, api_key=self._api_key)
         return self._cache[model]
 
     def complete(self, system, messages, tools=None) -> Reply:
@@ -387,10 +390,13 @@ class FallbackLLM(LLM):
         ) from last
 
 
-def build_llm(provider: str, model: str, fallbacks: list[str] | None = None) -> LLM:
+def build_llm(
+    provider: str, model: str, fallbacks: list[str] | None = None,
+    api_key: str | None = None,
+) -> LLM:
     if provider not in _BACKENDS:
         raise ValueError(f"Unknown provider {provider!r}")
     chain = [model] + [m for m in (fallbacks or []) if m != model]
     if len(chain) == 1:
-        return _BACKENDS[provider](model)
-    return FallbackLLM(provider, chain)
+        return _BACKENDS[provider](model, api_key=api_key)
+    return FallbackLLM(provider, chain, api_key=api_key)
