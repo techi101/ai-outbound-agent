@@ -2,7 +2,8 @@ requests>=2.31
 beautifulsoup4>=4.12
 python-dotenv>=1.0
 ddgs>=9.0
-streamlit>=1.49,<2
+fastapi>=0.110
+uvicorn>=0.29
 
 # The hosted app supports all three providers.
 anthropic>=0.70,<1

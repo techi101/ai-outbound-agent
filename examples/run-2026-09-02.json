@@ -1,0 +1,76 @@
+{
+  "_comment": "Structured copy of examples/run-2026-09-02.md for the web UI. Every text value is copied from that file; tests/test_web_app.py checks this.",
+  "source": "recorded",
+  "recorded_on": "2026-09-02",
+  "recorded_label": "Recorded example, 2 Sep 2026",
+  "icp": "early-stage Indian SaaS startups that are hiring AI engineers",
+  "command": "python run.py \"early-stage Indian SaaS startups that are hiring AI engineers\" --target 2 --min-score 55",
+  "target": 2,
+  "min_score": 55,
+  "provider": "gemini",
+  "model": "gemini-3.5-flash",
+  "iterations": 20,
+  "input_tokens": 160441,
+  "output_tokens": 4549,
+  "cost_label": "$0.00 (free tier; would list at $0.0595)",
+  "cost_per_qualified_label": "$0.0000",
+  "steps": [
+    {"tool": "search_companies", "detail": "Indian AI SaaS startups hiring \"AI engineer\" or \"Machine Learning\""},
+    {"tool": "search_companies", "detail": "YC India startups hiring \"AI engineer\" OR \"Machine learning\""},
+    {"tool": "search_companies", "detail": "\"Peakflo\" careers \"AI\" OR \"Machine Learning\" OR \"ML\""},
+    {"tool": "fetch_company_page", "detail": "https://peakflo.co/about-us"},
+    {"tool": "extract_signals", "detail": "Peakflo"},
+    {"tool": "score_fit", "detail": "Peakflo"},
+    {"tool": "save_prospect", "detail": "https://peakflo.co/"},
+    {"tool": "search_companies", "detail": "\"YC\" Indian AI startups hiring OR careers OR jobs"},
+    {"tool": "search_companies", "detail": "\"SaaS Go Live in Days, not Months\" Y Combinator"},
+    {"tool": "search_companies", "detail": "\"Lab0\" company website Y Combinator"},
+    {"tool": "fetch_company_page", "detail": "https://lab0.ai/yc", "note": "dead path"},
+    {"tool": "fetch_company_page", "detail": "https://lab0.ai/", "note": "recovered, still thin, dropped"},
+    {"tool": "search_companies", "detail": "\"Portkey.ai\" OR \"Portkey AI\" careers \"AI Engineer\""},
+    {"tool": "search_companies", "detail": "\"TrueFoundry\" careers OR jobs \"AI\" OR \"Engineer\""},
+    {"tool": "fetch_company_page", "detail": "https://www.truefoundry.com/careers"},
+    {"tool": "extract_signals", "detail": "TrueFoundry"},
+    {"tool": "score_fit", "detail": "TrueFoundry"},
+    {"tool": "save_prospect", "detail": "https://www.truefoundry.com/careers"}
+  ],
+  "model_switches": [
+    {"from": "gemini-3.5-flash", "to": "gemini-3.7-flash", "why": "ClientError"},
+    {"from": "gemini-3.7-flash", "to": "gemini-3.6-flash", "why": "ClientError"},
+    {"from": "gemini-3.6-flash", "to": "gemini-flash-latest", "why": "ServerError"},
+    {"from": "gemini-flash-latest", "to": "gemini-3.6-flash", "why": "ServerError"},
+    {"from": "gemini-3.6-flash", "to": "gemini-3.7-flash", "why": "ClientError"},
+    {"from": "gemini-3.7-flash", "to": "gemini-3.6-flash", "why": "ClientError"}
+  ],
+  "prospects": [
+    {
+      "company": "TrueFoundry",
+      "url": "https://www.truefoundry.com/careers",
+      "logo": "logos/truefoundry.png",
+      "score": 95,
+      "signals_text": "Early-stage Indian AI/LLMOps SaaS startup founded by IIT Kharagpur alumni, offices in Bengaluru and San Jose. Builds AI infrastructure (AI Gateway, MCP Gateway, LLMOps). Actively hiring AI/ML engineers, including Senior AI/ML Engineer for the LLM and Agent Stack.",
+      "signal_chips": ["Actively hiring AI/ML engineers", "AI/LLMOps SaaS", "Bengaluru and San Jose"],
+      "subject": "Hiring AI engineers at TrueFoundry",
+      "body": "Saw you are currently hiring a Senior AI/ML Engineer in Bengaluru for your LLM and agent stack.\n\nFinding candidates with hands-on experience in agent frameworks and LLMOps is difficult right now. We help early-stage Indian startups source and screen pre-vetted AI engineers to fill open roles faster.\n\nWould you be open to reviewing two or three candidate profiles for this position this week?",
+      "critic_verdict": "pass",
+      "critic_note": "The draft directly references TrueFoundry's specific open role for a Senior AI/ML Engineer on their LLM and agent stack in Bengaluru, stays strictly within word limits, and asks a single clear question.",
+      "revisions": 0
+    },
+    {
+      "company": "Peakflo",
+      "url": "https://peakflo.co/",
+      "logo": "logos/peakflo.svg",
+      "score": 80,
+      "signals_text": "YC W22 backed fintech and agentic SaaS startup, $4.1M seed, active in Singapore and India. Hiring a Machine Learning Engineer Intern (paid, India/remote) and an AI Automation Engineer.",
+      "signal_chips": ["Hiring a Machine Learning Engineer Intern", "YC W22 backed", "$4.1M seed"],
+      "subject": "ML hiring at Peakflo",
+      "body": "Notice Peakflo is currently hiring an ML Engineer Intern and an AI Automation Engineer in India.\n\nWe help seed-stage SaaS companies source and hire pre-screened AI and ML engineers in India within two weeks.\n\nAre you open to reviewing a few candidate profiles for these roles this week?",
+      "critic_verdict": "pass",
+      "critic_note": "The email cites specific, unique job titles currently open at Peakflo, stays under 120 words, includes a single clear call to action, and strictly uses facts present in the signals.",
+      "revisions": 0
+    }
+  ],
+  "skipped": [
+    {"company": "Lab0", "why": "recovered, still thin, dropped"}
+  ]
+}

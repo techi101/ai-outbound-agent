@@ -60,7 +60,7 @@ figure that decides whether a channel is worth running.
 pip install -r requirements.txt
 cp .env.example .env          # add one API key
 python run.py "seed-stage Indian SaaS companies hiring their first AI engineer"
-streamlit run app.py          # dashboard: prospects, drafts, trace, cost
+uvicorn server:app --port 8000   # web app at http://localhost:8000
 ```
 
 Set `ANTHROPIC_API_KEY`, `GROQ_API_KEY`, or `GOOGLE_API_KEY`. Whichever is
@@ -73,33 +73,39 @@ the agent looks hung.
 
 ## Stack
 
-Python · Claude, Groq or Gemini · SQLite · Streamlit
+Python · Claude, Groq or Gemini · SQLite · FastAPI · plain HTML/CSS/JS (no build step)
 
-## Public demo and deployment
+## The web app
 
-The web app opens with the [recorded example](examples/run-2026-09-02.md), so
-visitors can inspect prospects, drafts and the research trace without an API
-key. The example is labelled with its recording date; it is not fresh research.
+Four steps, one primary button on each screen:
 
-For live research, choose a provider and enter your own API key in the sidebar.
-Keys are passed directly to that session's model client, not written to an
-environment variable or the database. Each browser session has a separate,
-temporary SQLite database. Refreshing or closing a session can discard its
-results. The app never sends outreach messages.
+1. **Describe your ideal customer.** One sentence, plus how many prospects you
+   want and the minimum fit score.
+2. **Agent research.** Every tool call in order: searches, pages read, facts
+   pulled, scores, saves. A live run fills this list as the agent works.
+3. **Review prospects.** A table with logo, fit score (0 to 100), the signals
+   the agent found, and the critic's verdict.
+4. **Approve drafts.** Open a prospect to read and edit its email, see why the
+   critic passed it, then copy or approve it. Approving does not send anything.
 
-To host this repository on Streamlit Community Cloud:
+It opens on the [recorded example](examples/run-2026-09-02.md), labelled
+"Recorded example, 2 Sep 2026", so visitors can click through without an API
+key. The UI reads [`examples/run-2026-09-02.json`](examples/run-2026-09-02.json),
+a structured copy of that run; a test checks every value in it against the
+markdown so the page never shows a number the run did not produce.
 
-1. Open <https://share.streamlit.io> and create an app from
-   `techi101/ai-outbound-agent`, branch `main`, entrypoint `app.py`.
-2. Select Python 3.12 in Advanced settings. No server-side API key is needed.
-3. Deploy and verify that the recorded example loads without signing in.
-4. For a live run, supply a valid provider key and a model available to your
-   account. Model availability and provider limits vary by account.
+For a live run, choose **New search**, pick a provider and paste your own key.
+The key goes to that run's model client only: never to disk, the database or
+the environment, and it is redacted from error messages. Each browser gets its
+own temporary SQLite database, so visitors never see each other's runs.
 
-All three provider SDKs are included in `requirements.txt`. Keep secrets out of
-Git; `.streamlit/secrets.toml` and `.env` are ignored.
+To host it, run `uvicorn server:app --host 0.0.0.0 --port $PORT` on any Python
+host (Render, Railway, Fly, Hugging Face Spaces). No server-side API key is
+needed.
 
-Run the offline deployment checks with `python -m unittest discover -s tests -v`.
+Tests: `python -m unittest discover -s tests -v`. The browser walk-through in
+`tests/test_ui_browser.py` runs the click path at 1440px and 390px with audio
+muted, and is skipped if Playwright is not installed.
 
 ## Roadmap
 
@@ -107,7 +113,7 @@ Run the offline deployment checks with `python -m unittest discover -s tests -v`
 - [x] Critic pass and regeneration
 - [x] SQLite persistence and per-prospect token logging
 - [x] Model fallback chain with backoff
-- [x] Streamlit dashboard: prospects, scores, drafts, cost per qualified lead
+- [x] Web app: describe → research → review → approve, with cost per qualified lead
 - [x] Worked example run committed to `examples/`
 - [ ] Reply handling and a follow-up sequence
 - [ ] Dedupe against companies contacted in earlier runs
