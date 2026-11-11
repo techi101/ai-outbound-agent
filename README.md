@@ -4,7 +4,7 @@ An agentic prospecting and outreach engine. You describe an ideal customer in a
 sentence and it finds matching companies, researches each one, scores fit, and
 drafts personalised outreach — then tells you what each qualified lead cost.
 
-> **Status: working.** See [`examples/run-2026-09-02.md`](examples/run-2026-09-02.md)
+> **Status: working.** Try it at <https://ai-outbound-agent-brown.vercel.app>. See [`examples/run-2026-09-02.md`](examples/run-2026-09-02.md)
 > for a real run, copied out of the database unedited.
 
 ## Why
@@ -96,12 +96,15 @@ markdown so the page never shows a number the run did not produce.
 
 For a live run, choose **New search**, pick a provider and paste your own key.
 The key goes to that run's model client only: never to disk, the database or
-the environment, and it is redacted from error messages. Each browser gets its
-own temporary SQLite database, so visitors never see each other's runs.
+the environment, and it is redacted from error messages. Each run gets its own
+temporary SQLite database, deleted when the run ends, so visitors never see
+each other's runs. Results live in the browser tab, so keep it open.
 
-To host it, run `uvicorn server:app --host 0.0.0.0 --port $PORT` on any Python
-host (Render, Railway, Fly, Hugging Face Spaces). No server-side API key is
-needed.
+**Live:** <https://ai-outbound-agent-brown.vercel.app>, deployed on Vercel from
+`api/index.py`. A live run is one streaming request (newline-delimited JSON),
+so nothing is held in server memory between requests; `vercel.json` allows it
+up to 300 seconds. No server-side API key is needed. It also runs on any
+Python host with `uvicorn server:app --host 0.0.0.0 --port $PORT`.
 
 Tests: `python -m unittest discover -s tests -v`. The browser walk-through in
 `tests/test_ui_browser.py` runs the click path at 1440px and 390px with audio

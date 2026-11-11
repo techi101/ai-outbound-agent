@@ -57,7 +57,6 @@
     edits: {},                  // runKey|company -> {subject, body}
     approved: load("approved", {}),
     drawer: null,               // index of open prospect
-    poll: null,
   };
 
   function load(key, fallback) {
@@ -185,7 +184,7 @@
     const foot = recorded
       ? `<span class="hint">This is the profile from the recorded run. No API key needed. For your own search, pick <strong>New search</strong>.</span>
          <button class="btn btn-primary btn-lg" id="primary">See how the agent researched it ${icon("arrow")}</button>`
-      : `<span class="hint" id="missing">${busy ? "A run is already in progress." : esc(missing) || "Takes a few minutes. You can watch every step."}</span>
+      : `<span class="hint" id="missing">${busy ? "A run is already in progress." : esc(missing) || "Takes a few minutes. Keep this tab open to watch every step."}</span>
          <button class="btn btn-primary btn-lg" id="primary" ${missing || busy ? "disabled" : ""}>Start research ${icon("arrow")}</button>`;
 
     return `${pageHead(1, "Describe your ideal customer", "Write who you want to reach. The agent finds matching companies, reads their sites, scores each one and drafts an email you can approve.")}
@@ -207,41 +206,60 @@
   }
   const how = (ic, t, d) => `<div class="how-item"><div class="how-icon">${icon(ic)}</div><h3>${t}</h3><p>${d}</p></div>`;
 
+  // A live run is one streaming request: each line is a JSON event.
   async function startLive() {
     const f = state.form;
     const btn = $("#primary");
     btn.disabled = true;
+    let res;
     try {
-      const res = await fetch("api/runs", {
+      res = await fetch("api/runs", {
         method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...f, target: +f.target, min_score: +f.min_score }),
       });
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Could not start the run.");
-      f.api_key = "";
-      state.live[data.run_id] = { status: "running", icp: f.icp, steps: [], reviews: [], prospects: [], model_switches: [], skipped: [], min_score: +f.min_score, target: +f.target };
-      state.runKey = data.run_id;
-      pollLive(data.run_id);
-      go("#/2");
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(typeof data.detail === "string" ? data.detail : "Could not start the run.");
+      }
     } catch (err) {
       toast(err.message);
       btn.disabled = false;
+      return;
     }
-  }
-
-  function pollLive(id) {
-    clearTimeout(state.poll);
-    const tick = async () => {
-      try {
-        const res = await fetch(`api/runs/${id}`);
-        if (res.ok) state.live[id] = await res.json();
-      } catch { /* retry next tick */ }
-      const v = state.live[id];
-      if (state.runKey === id && route().step === 2) render(); else renderSidebar(route().step);
-      if (v.status === "running") state.poll = setTimeout(tick, 1500);
-      else toast(v.status === "done" ? `Research finished: ${v.prospects.length} prospects.` : "The run failed. See step 2.");
+    f.api_key = "";
+    const id = "live-" + Date.now();
+    const v = { status: "running", icp: f.icp, steps: [], reviews: [], prospects: [], model_switches: [], skipped: [],
+      min_score: +f.min_score, target: +f.target, provider: f.provider, model: f.model || (state.config ? state.config.default_models[f.provider] : "") };
+    state.live[id] = v;
+    state.runKey = id;
+    go("#/2");
+    const refresh = () => { if (state.runKey === id && route().step === 2) render(); else renderSidebar(route().idx !== null ? 4 : route().step); };
+    const handle = (e) => {
+      if (e.type === "step") v.steps.push({ tool: e.tool, detail: e.detail, ok: e.ok });
+      else if (e.type === "review") v.reviews.push(e);
+      else if (e.type === "done") { Object.assign(v, e, { status: "done" }); delete v.type; }
+      else if (e.type === "error") { v.status = "failed"; v.error = e.error; }
+      else return;
+      refresh();
     };
-    state.poll = setTimeout(tick, 800);
+    try {
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buf = "";
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buf += decoder.decode(value, { stream: true });
+        let nl;
+        while ((nl = buf.indexOf("\n")) !== -1) {
+          const line = buf.slice(0, nl).trim();
+          buf = buf.slice(nl + 1);
+          if (line) handle(JSON.parse(line));
+        }
+      }
+    } catch { /* connection dropped */ }
+    if (v.status === "running") { v.status = "failed"; v.error = "The connection closed before the run finished. Try again."; refresh(); }
+    toast(v.status === "done" ? `Research finished: ${v.prospects.length} prospects.` : "The run failed. See step 2.");
   }
 
   // ---------------------------------------------------------------- step 2
@@ -503,7 +521,7 @@
           const missing = !f.api_key.trim() ? "Add your API key to start." : !f.icp.trim() ? "Describe your ideal customer to start." : "";
           const busy = Object.values(state.live).some((v) => v.status === "running");
           primary.disabled = !!missing || busy;
-          $("#missing").textContent = busy ? "A run is already in progress." : missing || "Takes a few minutes. You can watch every step.";
+          $("#missing").textContent = busy ? "A run is already in progress." : missing || "Takes a few minutes. Keep this tab open to watch every step.";
         };
         for (const id of ["icp", "target", "min_score", "model", "api_key"]) {
           $("#" + id).oninput = (e) => { f[id] = e.target.value; refresh(); };
@@ -553,14 +571,6 @@
     ]);
     state.example = ex;
     state.config = cfg;
-    // A page reload loses live runs held in memory here; ask the server for them.
-    try {
-      const runs = await fetch("api/runs").then((r) => (r.ok ? r.json() : []));
-      for (const r of runs.reverse()) {
-        state.live[r.run_id] = await fetch(`api/runs/${r.run_id}`).then((x) => x.json());
-        if (r.status === "running") pollLive(r.run_id);
-      }
-    } catch { /* no live runs */ }
     render();
   }
   boot().catch(() => {

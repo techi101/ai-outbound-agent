@@ -2,7 +2,6 @@ import json
 import os
 from pathlib import Path
 import re
-import time
 import unittest
 from unittest.mock import patch
 
@@ -24,14 +23,8 @@ def _flat(text: str) -> str:
     return re.sub(r"\s+", " ", text)
 
 
-def _wait(client, run_id, timeout=5):
-    deadline = time.time() + timeout
-    while time.time() < deadline:
-        view = client.get(f"/api/runs/{run_id}").json()
-        if view["status"] != "running":
-            return view
-        time.sleep(0.05)
-    raise AssertionError("run did not finish")
+def _events(response):
+    return [json.loads(line) for line in response.text.splitlines() if line.strip()]
 
 
 def fake_agent(icp, settings, on_event=None):
@@ -106,43 +99,47 @@ class LiveRunTests(unittest.TestCase):
         no_icp = client.post("/api/runs", json={"provider": "groq", "api_key": "k", "icp": "  "})
         bad = client.post("/api/runs", json={"provider": "openai", "api_key": "k", "icp": "SaaS"})
         self.assertEqual((no_key.status_code, no_icp.status_code, bad.status_code), (400, 400, 400))
-        self.assertEqual(client.get("/api/runs").json(), [])
 
     def test_live_run_streams_steps_and_never_returns_the_key(self):
         with patch.object(server, "run_agent", fake_agent):
-            client = TestClient(server.app)
-            started = client.post("/api/runs", json={"provider": "groq", "api_key": "secret-visitor-key",
-                                                     "icp": "anvil makers", "target": 1, "min_score": 50})
-            self.assertEqual(started.status_code, 200)
-            view = _wait(client, started.json()["run_id"])
-        self.assertEqual(view["status"], "done")
-        self.assertEqual(view["steps"], [{"tool": "search_companies", "detail": "q", "ok": True}])
-        self.assertEqual(view["model_switches"], [{"from": "a", "to": "b", "why": "ServerError"}])
-        p = view["prospects"][0]
+            res = TestClient(server.app).post("/api/runs", json={
+                "provider": "groq", "api_key": "secret-visitor-key",
+                "icp": "anvil makers", "target": 1, "min_score": 50})
+        self.assertEqual(res.status_code, 200)
+        events = _events(res)
+        self.assertEqual([e["type"] for e in events], ["step", "review", "done"])
+        self.assertEqual(events[0], {"type": "step", "tool": "search_companies", "detail": "q", "ok": True})
+        done = events[-1]
+        self.assertEqual(done["model_switches"], [{"from": "a", "to": "b", "why": "ServerError"}])
+        p = done["prospects"][0]
         self.assertEqual((p["company"], p["score"], p["revisions"]), ("Acme", 77, 1))
         self.assertEqual(p["signal_chips"], ["Hiring ML engineer", "Seed"])
-        self.assertNotIn("secret-visitor-key", json.dumps(view))
+        self.assertNotIn("secret-visitor-key", res.text)
 
     def test_failed_run_redacts_the_key(self):
         def boom(icp, settings, on_event=None):
             raise RuntimeError(f"401 bad key {settings.api_key}")
 
         with patch.object(server, "run_agent", boom):
-            client = TestClient(server.app)
-            rid = client.post("/api/runs", json={"provider": "groq", "api_key": "leaky-key", "icp": "x"}).json()["run_id"]
-            view = _wait(client, rid)
-        self.assertEqual(view["status"], "failed")
-        self.assertIn("[redacted]", view["error"])
-        self.assertNotIn("leaky-key", json.dumps(view))
+            res = TestClient(server.app).post("/api/runs", json={"provider": "groq", "api_key": "leaky-key", "icp": "x"})
+        events = _events(res)
+        self.assertEqual(events[-1]["type"], "error")
+        self.assertIn("[redacted]", events[-1]["error"])
+        self.assertNotIn("leaky-key", res.text)
 
-    def test_visitors_do_not_share_runs(self):
-        with patch.object(server, "run_agent", fake_agent):
-            first, second = TestClient(server.app), TestClient(server.app)
-            rid = first.post("/api/runs", json={"provider": "groq", "api_key": "k", "icp": "private profile"}).json()["run_id"]
-            _wait(first, rid)
-            self.assertEqual(len(first.get("/api/runs").json()), 1)
-            self.assertEqual(second.get("/api/runs").json(), [])
-            self.assertEqual(second.get(f"/api/runs/{rid}").status_code, 404)
+    def test_each_run_gets_its_own_database(self):
+        paths = []
+
+        def record(icp, settings, on_event=None):
+            paths.append(settings.db_path)
+            return fake_agent(icp, settings, on_event)
+
+        with patch.object(server, "run_agent", record):
+            client = TestClient(server.app)
+            for _ in range(2):
+                client.post("/api/runs", json={"provider": "groq", "api_key": "k", "icp": "private profile"})
+        self.assertEqual(len(set(paths)), 2)
+        self.assertFalse(any(Path(p).parent.exists() for p in paths))  # cleaned up after each run
 
 
 class CredentialTests(unittest.TestCase):
